@@ -1,0 +1,66 @@
+#!/bin/sh
+
+#abort with message
+abort() {
+	echo $@
+	exit 1
+}
+
+
+# json with <title>, <body>, <head> and <base>
+json() {
+	cat <<EOF
+{
+	"title": "$1",
+	"body": "$2",
+	"head": "$3",
+	"base": "$4"
+}
+EOF
+}
+
+
+#branch
+branch="wip/$1"
+test -z $branch && echo "branch required." 1>&2 && exit 1
+
+
+#user
+user=$(git config --global user.email)
+test -z "$user" && abort "git config user.email required"
+
+
+#changelog message
+message="Creating wip/$branch at $(date)"
+
+
+#checkout and push
+echo
+echo " Creating and pushing branch: $branch"
+echo
+echo
+touch changelog.md && echo "$message" >> changelog.md > /dev/null
+git checkout -b $branch
+git add changelog.md && git commit -m "$message"
+git push -u origin $branch
+
+
+#project
+project=$(git config remote.origin.url | sed 's/^.*://' | sed 's/\.git$//')
+
+
+#prompt
+echo
+echo
+echo " Creating WIP pull request at $branch"
+echo
+printf " Base branch: " && read base_branch
+printf " Title: " && read title
+printf " Description: " && read description
+echo
+
+wip_body="# WIP\n\n$description"
+
+#request
+body=$(json "$title" "$wip_body" "$branch" "$base_branch")
+curl -u "$user" "https://api.github.com/repos/$project/pulls" -d "$body" > /dev/null
